@@ -1,0 +1,64 @@
+name: tests
+
+on:
+  push:
+    branches: ["base"]
+    paths:
+      - '**.go'
+      - '**.mod'
+  pull_request:
+    paths:
+      - '**.go'
+      - '**.mod'
+  workflow_dispatch: {}
+
+jobs:
+  lint:
+    name: "Lint"
+    if: ${{ !endsWith(github.actor, '[bot]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: projectdiscovery/actions/setup/go@v1
+        with:
+          go-version: "stable"
+      - uses: projectdiscovery/actions/golangci-lint/v2@v1
+
+  tests:
+    name: "Tests"
+    needs: ["lint"]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        go-version: ["1.27", "stable"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: projectdiscovery/actions/setup/go@v1
+        with:
+          go-version: ${{ matrix.go-version }}
+      - run: go test -v -race ./...
+
+  integration:
+    name: "Integration tests"
+    needs: ["lint"]
+    runs-on: "ubuntu-latest"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: projectdiscovery/actions/setup/go@v1
+        with:
+          go-version: "stable"
+      - run: go test -tags=integration -run=TestLiveAPI -v
+        env:
+          TYPESAFE_API_KEY: ${{ secrets.TYPESAFE_API_KEY }}
+
+  benchs:
+    name: "Benchmarks"
+    needs: ["tests"]
+    runs-on: "ubuntu-latest"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: projectdiscovery/actions/setup/go@v1
+        with:
+          go-version: "stable"
+      - run: go test -run '^$' -bench=. ./...
